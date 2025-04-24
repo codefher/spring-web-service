@@ -17,6 +17,13 @@ pipeline {
       }
     }
 
+    stage('Prepare') {
+      steps {
+        // marca mvnw como ejecutable
+        sh 'chmod +x mvnw'
+      }
+    }
+
     stage('Build & Test') {
       steps {
         // empaqueta + ejecuta tests
