@@ -19,7 +19,10 @@ pipeline {
         }
 
         stage('Build & Test') {
-            steps { sh './mvnw clean verify -B' }
+            steps {
+                sh 'chmod +x mvnw'                // ← restaurado
+                sh './mvnw -B clean verify'
+            }
         }
 
         stage('Build Docker Image') {
