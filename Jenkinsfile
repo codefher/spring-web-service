@@ -1,8 +1,7 @@
 pipeline {
-    /* 1. Build dentro del contenedor Maven correcto */
     agent {
         docker {
-            image 'maven:3.8.8-eclipse-temurin-17-alpine'   // <-- tag existente
+            image 'maven:3.8.8-eclipse-temurin-17-alpine'
             args  '-v $HOME/.m2:/root/.m2'
         }
     }
@@ -14,6 +13,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps { checkout scm }
         }
@@ -43,7 +43,7 @@ pipeline {
         }
 
         stage('Deploy to Staging') {
-            agent any           // docker-compose corre en el host
+            agent any                                   // host con docker-compose
             steps {
                 dir('deploy') {
                     withEnv(["IMAGE_TAG=${env.BUILD_NUMBER}"]) {
@@ -56,8 +56,6 @@ pipeline {
         }
     }
 
-    /* 2. Limpieza segura: crea un nodo temporal,
-          así siempre hay workspace aunque el pull haya fallado */
     post {
         success {
             echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging"
@@ -66,7 +64,7 @@ pipeline {
             echo "❌ Algo falló, revisa logs"
         }
         always {
-            node { cleanWs() }
+            cleanWs notFailBuild: true, deleteDirs: true
         }
     }
 }
