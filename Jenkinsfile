@@ -1,73 +1,60 @@
 pipeline {
   agent any
 
-  tools {
-    maven 'Maven 3.9.4'      // coincide con la instalación de Maven que definiste en Manage Jenkins → Global Tool Configuration
-    jdk 'jdk-17'             // idem para tu JDK
-  }
-
   environment {
-    SERVICE_PORT = '8081'    // el puerto en el que quieres exponer tu servicio
+    IMAGE_NAME = 'codefher/spring-web-service'
   }
 
   stages {
     stage('Checkout') {
-      steps {
-        checkout scm
-      }
-    }
-
-    stage('Prepare') {
-      steps {
-        // marca mvnw como ejecutable
-        sh 'chmod +x mvnw'
-      }
+      steps { checkout scm }
     }
 
     stage('Build & Test') {
       steps {
-        // empaqueta + ejecuta tests
+        sh 'chmod +x mvnw'
         sh './mvnw clean package'
       }
     }
 
-    stage('Archive JAR') {
+    stage('Build Docker Image') {
       steps {
-        archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+        script {
+          // construye la imagen usando el Dockerfile de la raíz
+          dockerImage = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}")
+        }
       }
     }
 
-    stage('Run Service') {
+    stage('Push to Docker Hub') {
       steps {
-        // mata cualquier instancia previa y levanta tu jar en background
-        sh '''
-          pkill -f "demo.*jar" || true
-          nohup java -jar target/demo-0.0.1-SNAPSHOT.jar \
-            --server.port=${SERVICE_PORT} > service.log 2>&1 &
-        '''
+        script {
+          docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
+            dockerImage.push()
+          }
+        }
       }
     }
 
-    stage('Smoke Test') {
+    stage('Deploy to Staging') {
       steps {
-        // espera unos segundos a que arranque
-        sh 'sleep 10'
-        // chequea el endpoint
-        sh "curl -f http://localhost:${SERVICE_PORT}/api/greeting"
+        dir('deploy') {
+          withEnv(["BUILD_NUMBER=${env.BUILD_NUMBER}"]) {
+            sh 'docker-compose down || true'
+            sh 'docker-compose pull'
+            sh 'docker-compose up -d'
+          }
+        }
       }
     }
   }
 
   post {
-    always {
-      // Guarda el log del service por si falla
-      archiveArtifacts artifacts: 'service.log', allowEmptyArchive: true
-    }
     success {
-      echo "✅ Build OK y servicio corriendo en puerto ${SERVICE_PORT}"
+      echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging"
     }
     failure {
-      echo "❌ Algo falló, consulta los artefactos y logs"
+      echo "❌ Algo falló, revisa logs"
     }
   }
 }
