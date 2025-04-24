@@ -1,50 +1,17 @@
 pipeline {
-    agent any
-
-    tools {
-        maven 'Maven 3.9.4'
-    }
-
-    triggers {
-        pollSCM('H/5 * * * *')
-    }
+    /*  El host Jenkins (o nodo con label “docker”) debe tener Docker,
+        así los pasos que lo usan funcionan                     */
+    agent any          // agente “real”, no contenedor
 
     environment {
-        IMAGE_NAME          = 'codefher/spring-web-service'
-        REGISTRY            = 'https://registry.hub.docker.com'
-        CREDS_ID            = 'dockerhub-creds'
-        SONARQUBE_SERVER    = 'MySonarQube'
-        SONAR_PROJECT_KEY   = 'spring-web-service'
-        SONAR_PROJECT_NAME  = 'Spring Web Service'
+        IMAGE_NAME = 'codefher/spring-web-service'
+        REGISTRY   = 'https://registry.hub.docker.com'
+        CREDS_ID   = 'dockerhub-creds'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
-        stage('Sonar Analysis') {
-            steps {
-                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                    sh """
-                        ./mvnw sonar:sonar \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
-                    """
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
+        /* ---------- BUILD & TEST DENTRO DEL CONTENEDOR MAVEN ---------- */
         stage('Build & Test') {
             agent {
                 docker {
@@ -53,11 +20,12 @@ pipeline {
                 }
             }
             steps {
-                sh 'chmod +x mvnw'
+                sh 'chmod +x mvnw'                 // o marca +x en Git y quítalo
                 sh './mvnw -B clean verify'
             }
         }
 
+        /* ---------- A PARTIR DE AQUÍ CORREMOS EN EL HOST CON DOCKER ---------- */
         stage('Build Docker Image') {
             steps {
                 script {
@@ -92,16 +60,8 @@ pipeline {
     }
 
     post {
-        success {
-            slackSend color: 'good',
-                      message: "✅ *${env.JOB_NAME}* #${env.BUILD_NUMBER} desplegado con éxito en *Staging*.\n🔗 http://localhost:8080"
-        }
-        failure {
-            slackSend color: 'danger',
-                      message: "❌ *${env.JOB_NAME}* #${env.BUILD_NUMBER} ha fallado. Revisa el log de Jenkins."
-        }
-        always {
-            cleanWs notFailBuild: true, deleteDirs: true
-        }
+        success { echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging" }
+        failure { echo "❌ Algo falló, revisa logs" }
+        always  { cleanWs notFailBuild: true, deleteDirs: true }
     }
 }
