@@ -1,10 +1,7 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.8.8-eclipse-temurin-17-alpine'
-            args  '-v $HOME/.m2:/root/.m2'
-        }
-    }
+    /*  El host Jenkins (o nodo con label “docker”) debe tener Docker,
+        así los pasos que lo usan funcionan                     */
+    agent any          // agente “real”, no contenedor
 
     environment {
         IMAGE_NAME = 'codefher/spring-web-service'
@@ -14,17 +11,21 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps { checkout scm }
-        }
-
+        /* ---------- BUILD & TEST DENTRO DEL CONTENEDOR MAVEN ---------- */
         stage('Build & Test') {
+            agent {
+                docker {
+                    image 'maven:3.8.8-eclipse-temurin-17-alpine'
+                    args  '-v $HOME/.m2:/root/.m2'
+                }
+            }
             steps {
-                sh 'chmod +x mvnw'                // ← restaurado
+                sh 'chmod +x mvnw'                 // o marca +x en Git y quítalo
                 sh './mvnw -B clean verify'
             }
         }
 
+        /* ---------- A PARTIR DE AQUÍ CORREMOS EN EL HOST CON DOCKER ---------- */
         stage('Build Docker Image') {
             steps {
                 script {
@@ -46,7 +47,6 @@ pipeline {
         }
 
         stage('Deploy to Staging') {
-            agent any                                   // host con docker-compose
             steps {
                 dir('deploy') {
                     withEnv(["IMAGE_TAG=${env.BUILD_NUMBER}"]) {
@@ -60,14 +60,8 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging"
-        }
-        failure {
-            echo "❌ Algo falló, revisa logs"
-        }
-        always {
-            cleanWs notFailBuild: true, deleteDirs: true
-        }
+        success { echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging" }
+        failure { echo "❌ Algo falló, revisa logs" }
+        always  { cleanWs notFailBuild: true, deleteDirs: true }
     }
 }
