@@ -29,20 +29,19 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                // Ahora sí corren los tests
                 sh 'mvn clean package'
             }
             post {
-                // 1) Archivamos el JAR generado
-                success {
-                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-                }
-                // 2) Publicamos resultados de tests JUnit
+                // 1) Publicamos JUnit siempre
                 always {
                     junit '**/target/surefire-reports/*.xml'
                 }
-                // 3) Publicamos informe de cobertura Jacoco
+                // 2) En caso de éxito, archivamos y publicamos cobertura
                 success {
+                    // 2a) Archivamos el JAR
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+
+                    // 2b) Publicamos Jacoco
                     jacoco(
                         execPattern: '**/target/jacoco.exec',
                         classPattern: '**/classes',
