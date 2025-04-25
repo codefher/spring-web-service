@@ -98,21 +98,20 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    // Para despliegue “in-place” en el mismo host que ejecuta Docker
-                    sh """
-                        # Para no fallar si el contenedor no existe:
-                        docker stop ${CONTAINER_NAME}  || true
-                        docker rm   ${CONTAINER_NAME}  || true
+                // Para no fallar si el contenedor no existe:
+                sh "docker stop ${CONTAINER_NAME} || true"
+                sh "docker rm   ${CONTAINER_NAME} || true"
 
-                        # Trae la última imagen
-                        docker pull ${IMAGE_NAME}:${env.BUILD_NUMBER}
+                // Trae la imagen correcta (con version-buildNumber completo)
+                sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
 
-                        # Lanza el contenedor
-                        docker run -d \\
-                          --name ${CONTAINER_NAME} \\
-                          -p ${EXPOSE_PORT}:${INTERNAL_PORT} \\
-                          ${IMAGE_NAME}:${env.BUILD_NUMBER}
-                    """
+                // Lanza el contenedor usando ese mismo tag
+                sh """
+                    docker run -d \
+                    --name ${CONTAINER_NAME} \
+                    -p ${EXPOSE_PORT}:${INTERNAL_PORT} \
+                    ${IMAGE_NAME}:${env.IMAGE_TAG}
+                """
                 }
             }
         }
