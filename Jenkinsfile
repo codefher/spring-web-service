@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME          = 'TU_USUARIO/spring-web-service'
+        IMAGE_NAME          = 'codefher/spring-web-service'
         REGISTRY_CREDENTIAL = 'dockerhub-creds'  // ID de tu credential en Jenkins
         SONARQUBE_SERVER    = 'MySonarQube'       // ID del servidor Sonar en Jenkins
         SONAR_PROJECT_KEY   = 'spring-web-service'
