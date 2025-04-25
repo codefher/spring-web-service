@@ -1,86 +1,108 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    IMAGE_NAME         = 'codefher/spring-web-service'
-    CREDS_DOCKERHUB    = 'dockerhub-creds'
-    SONARQUBE_SERVER   = 'MySonarQube'
-    SONAR_TOKEN_ID     = 'sonar-token'
-    SONAR_PROJECT_KEY  = 'spring-web-service'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    tools {
+        maven 'Maven 3.9.4'            // Asegúrate de que existe con ese nombre en Global Tool Configuration
     }
 
-    stage('Build, Test & SonarQube') {
-      agent {
-        docker {
-          image 'maven:3.8.8-eclipse-temurin-17-alpine'
-          args  '-v $HOME/.m2:/root/.m2 --network host'
-        }
-      }
-      steps {
-        sh 'chmod +x mvnw'
-        withCredentials([string(credentialsId: SONAR_TOKEN_ID, variable: 'SONAR_TOKEN')]) {
-          withSonarQubeEnv(SONARQUBE_SERVER) {
-            sh """
-              ./mvnw clean verify sonar:sonar \
-                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                -Dsonar.login=$SONAR_TOKEN \
-                -Dsonar.java.binaries=target/classes
-            """
-          }
-        }
-      }
+    environment {
+        IMAGE_NAME          = 'TU_USUARIO/spring-web-service'
+        REGISTRY_CREDENTIAL = 'dockerhub-creds'  // ID de tu credential en Jenkins
+        SONARQUBE_SERVER    = 'MySonarQube'       // ID del servidor Sonar en Jenkins
+        SONAR_PROJECT_KEY   = 'spring-web-service'
+        SONAR_PROJECT_NAME  = 'Spring Web Service'
+        CONTAINER_NAME      = 'spring-web-service'
+        EXPOSE_PORT         = '8081'             // puerto público
+        INTERNAL_PORT       = '8080'             // definido en tu Dockerfile
     }
 
-    stage('Quality Gate') {
-      steps {
-        timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
-        }
-      }
+    triggers {
+        pollSCM('H/5 * * * *')
     }
 
-    stage('Build & Push Docker Image') {
-      steps {
-        script {
-          docker.withRegistry('', CREDS_DOCKERHUB) {
-            def img = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}")
-            img.push()
-            img.push('latest')
-          }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
+
+        stage('Build & Test') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh """
+                        mvn sonar:sonar \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Por defecto usa el Dockerfile en la raíz
+                    dockerImage = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}")
+                }
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', "${REGISTRY_CREDENTIAL}") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    // Para despliegue “in-place” en el mismo host que ejecuta Docker
+                    sh """
+                        # Para no fallar si el contenedor no existe:
+                        docker stop ${CONTAINER_NAME}  || true
+                        docker rm   ${CONTAINER_NAME}  || true
+
+                        # Trae la última imagen
+                        docker pull ${IMAGE_NAME}:${env.BUILD_NUMBER}
+
+                        # Lanza el contenedor
+                        docker run -d \\
+                          --name ${CONTAINER_NAME} \\
+                          -p ${EXPOSE_PORT}:${INTERNAL_PORT} \\
+                          ${IMAGE_NAME}:${env.BUILD_NUMBER}
+                    """
+                }
+            }
+        }
     }
 
-    stage('Deploy (docker run)') {
-      steps {
-        script {
-          // Si ya hay un contenedor corriendo, lo paramos y eliminamos
-          sh "docker stop spring-web-service || true"
-          sh "docker rm spring-web-service || true"
-
-          // Tiramos la última imagen y arrancamos
-          sh "docker pull ${IMAGE_NAME}:${env.BUILD_NUMBER}"
-          sh """
-            docker run -d \
-              --name spring-web-service \
-              -p 8081:8080 \
-              ${IMAGE_NAME}:${env.BUILD_NUMBER}
-          """
+    post {
+        success {
+            slackSend color: 'good',
+                      message: "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} desplegado en http://<HOST>:${EXPOSE_PORT}"
         }
-      }
+        failure {
+            slackSend color: 'danger',
+                      message: "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} ha fallado"
+        }
     }
-  }
-
-  post {
-    success { echo "✅ Despliegue completado: ${IMAGE_NAME}:${env.BUILD_NUMBER}" }
-    failure { echo "❌ Ha fallado el pipeline, revisa los logs." }
-    always  { cleanWs() }
-  }
 }
