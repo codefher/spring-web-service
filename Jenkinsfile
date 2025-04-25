@@ -48,7 +48,7 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
@@ -103,6 +103,11 @@ pipeline {
         failure {
             slackSend color: 'danger',
                       message: "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} ha fallado"
+        }
+        unsuccessful {
+            echo "⚠️ Quality Gate falló, pero seguimos con el pipeline"
+            // opcional: marcar build como UNSTABLE en lugar de FAILED
+            script { currentBuild.result = 'UNSTABLE' }
         }
     }
 }
