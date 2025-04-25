@@ -15,7 +15,7 @@ public class GreetingController {
     @GetMapping("/greeting")
     public Map<String, Object> greeting() {
         Map<String,Object> resp = new HashMap<>();
-        resp.put("message", "¡Hola desde Spring Boot, pruebita deploy!");
+        resp.put("message", "¡Hola desde Spring Boot!");
         resp.put("timestamp", LocalDateTime.now().toString());
         return resp;
     }
