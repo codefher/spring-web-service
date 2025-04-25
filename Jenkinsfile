@@ -29,7 +29,23 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                // 1) Quitamos el skipTests para que corran realmente
+                sh 'mvn clean package'
+            }
+            post {
+                // 2) Publicamos resultados de tests JUnit
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
+                // 3) Publicamos informe de cobertura Jacoco
+                success {
+                    jacoco(
+                        execPattern: '**/target/jacoco.exec',        // o reportPattern si usas XML
+                        classPattern: '**/classes',
+                        sourcePattern: 'src/main/java',
+                        inclusionPattern: '**/*.class'
+                    )
+                }
             }
         }
 
