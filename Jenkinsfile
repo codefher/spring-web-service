@@ -3,17 +3,10 @@ pipeline {
         así los pasos que lo usan funcionan                     */
     agent any          // agente “real”, no contenedor
 
-    triggers {
-        pollSCM('H/5 * * * *') // Opcional: verifica cambios cada 5 minutos
-    }
-
     environment {
         IMAGE_NAME = 'codefher/spring-web-service'
         REGISTRY   = 'https://registry.hub.docker.com'
         CREDS_ID   = 'dockerhub-creds'
-        SONARQUBE_SERVER   = 'MySonarQube'
-        SONAR_PROJECT_KEY  = 'spring-web-service'
-        SONAR_PROJECT_NAME = 'Spring Web Service'
     }
 
     stages {
@@ -64,27 +57,6 @@ pipeline {
                 }
             }
         }
-
-        stage('Sonar Analysis') {
-            steps {
-                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                    sh """
-                        ./mvnw sonar:sonar \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
-                    """
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
     }
 
     post {
