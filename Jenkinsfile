@@ -29,10 +29,14 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                // 1) Quitamos el skipTests para que corran realmente
+                // Ahora sí corren los tests
                 sh 'mvn clean package'
             }
             post {
+                // 1) Archivamos el JAR generado
+                success {
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
                 // 2) Publicamos resultados de tests JUnit
                 always {
                     junit '**/target/surefire-reports/*.xml'
@@ -40,7 +44,7 @@ pipeline {
                 // 3) Publicamos informe de cobertura Jacoco
                 success {
                     jacoco(
-                        execPattern: '**/target/jacoco.exec',        // o reportPattern si usas XML
+                        execPattern: '**/target/jacoco.exec',
                         classPattern: '**/classes',
                         sourcePattern: 'src/main/java',
                         inclusionPattern: '**/*.class'
@@ -72,8 +76,12 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Por defecto usa el Dockerfile en la raíz
-                    dockerImage = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}")
+                    def version = sh(
+                        script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout",
+                        returnStdout: true
+                    ).trim()
+                    env.IMAGE_TAG = "${version}-${env.BUILD_NUMBER}"
+                    dockerImage = docker.build("${IMAGE_NAME}:${env.IMAGE_TAG}")
                 }
             }
         }
@@ -114,7 +122,7 @@ pipeline {
     post {
         success {
             slackSend color: 'good',
-                      message: "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} desplegado en http://<HOST>:${EXPOSE_PORT}"
+            message: "✅ ${env.JOB_NAME} :${env.IMAGE_TAG} desplegado en http://<HOST>:${EXPOSE_PORT}"
         }
         failure {
             slackSend color: 'danger',
