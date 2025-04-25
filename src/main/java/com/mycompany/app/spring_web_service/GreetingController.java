@@ -19,4 +19,21 @@ public class GreetingController {
         resp.put("timestamp", LocalDateTime.now().toString());
         return resp;
     }
+
+    // —––––––––– Code Smell: duplicación de lógica —–––––––––
+    @GetMapping("/greetingDuplicado")
+    public Map<String,Object> greetingDuplicado() {
+        // exactamente igual a greeting()
+        Map<String,Object> resp = new HashMap<>();
+        resp.put("message", "¡Hola desde Spring Boot, pruebita deploy!");
+        resp.put("timestamp", LocalDateTime.now().toString());
+        return resp;
+    }
+
+    // —––––––––– Bug intencional: comparación de Strings con == —–––––––––
+    @GetMapping("/bugExample")
+    public boolean bugExample() {
+        String a = "test", b = new String("test");
+        return (a == b);  // Sonar marcará esto como bug: comparar Strings con '=='
+    }
 }
