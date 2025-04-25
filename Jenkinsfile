@@ -25,18 +25,6 @@ pipeline {
             }
         }
 
-        stage('Sonar Analysis') {
-            steps {
-                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                    sh """
-                        ./mvnw sonar:sonar \
-                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
-                    """
-                }
-            }
-        }
-
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
@@ -56,6 +44,18 @@ pipeline {
             steps {
                 sh 'chmod +x mvnw'
                 sh './mvnw -B clean verify'
+            }
+        }
+
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh """
+                        ./mvnw sonar:sonar \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
+                    """
+                }
             }
         }
 
