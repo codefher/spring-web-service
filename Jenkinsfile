@@ -1,15 +1,49 @@
 pipeline {
-    /*  El host Jenkins (o nodo con label “docker”) debe tener Docker,
-        así los pasos que lo usan funcionan                     */
-    agent any          // agente “real”, no contenedor
+    agent any  // El host Jenkins debe tener Docker instalado
+
+    tools {
+        maven 'Maven 3.9.4' // Asegúrate de configurarlo en Jenkins > Global Tool Configuration
+    }
+
+    triggers {
+        pollSCM('H/5 * * * *') // Opcional: verifica cambios cada 5 minutos
+    }
 
     environment {
-        IMAGE_NAME = 'codefher/spring-web-service'
-        REGISTRY   = 'https://registry.hub.docker.com'
-        CREDS_ID   = 'dockerhub-creds'
+        IMAGE_NAME         = 'codefher/spring-web-service'
+        REGISTRY           = 'https://registry.hub.docker.com'
+        CREDS_ID           = 'dockerhub-creds'
+        SONARQUBE_SERVER   = 'MySonarQube'
+        SONAR_PROJECT_KEY  = 'spring-web-service'
+        SONAR_PROJECT_NAME = 'Spring Web Service'
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh """
+                        ./mvnw sonar:sonar \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.projectName='${SONAR_PROJECT_NAME}'
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
 
         /* ---------- BUILD & TEST DENTRO DEL CONTENEDOR MAVEN ---------- */
         stage('Build & Test') {
@@ -20,7 +54,7 @@ pipeline {
                 }
             }
             steps {
-                sh 'chmod +x mvnw'                 // o marca +x en Git y quítalo
+                sh 'chmod +x mvnw'
                 sh './mvnw -B clean verify'
             }
         }
@@ -60,8 +94,18 @@ pipeline {
     }
 
     post {
-        success { echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging" }
-        failure { echo "❌ Algo falló, revisa logs" }
-        always  { cleanWs notFailBuild: true, deleteDirs: true }
+        success {
+            echo "✅ Deployed ${IMAGE_NAME}:${env.BUILD_NUMBER} to staging"
+            slackSend color: 'good',
+                      message: "✅ *${env.JOB_NAME}* #${env.BUILD_NUMBER} desplegado en *Staging* exitosamente.\n🔗 http://localhost:8080"
+        }
+        failure {
+            echo "❌ Algo falló, revisa logs"
+            slackSend color: 'danger',
+                      message: "❌ *${env.JOB_NAME}* #${env.BUILD_NUMBER} ha fallado. Revisa Jenkins."
+        }
+        always {
+            cleanWs notFailBuild: true, deleteDirs: true
+        }
     }
 }
