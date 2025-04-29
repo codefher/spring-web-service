@@ -120,7 +120,7 @@ pipeline {
             }
         }
 
-/*         stage('Test') {
+        stage('Test') {
             steps {
                 script {
                     // opcional: darle unos segundos para que Spring arranque
@@ -129,7 +129,7 @@ pipeline {
                     sh "docker exec spring-web-service curl -f http://localhost:8080/actuator/health"
                 }
             }
-        } */
+        }
 
     }
 
