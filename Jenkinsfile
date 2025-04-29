@@ -99,25 +99,42 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    // detecta qué rama es
-                    def branch = env.BRANCH_NAME
-                    def port = (branch == 'main')    ? PROD_PORT :
+                // detecta qué rama es
+                def branch = env.BRANCH_NAME
+                def port = (branch == 'main')    ? PROD_PORT :
                             (branch == 'staging') ? STAGING_PORT :
                                                     DEV_PORT
+                // lo expongo al resto del pipeline
+                env.EXPOSE_PORT = port
 
-                    // el resto igual, usando port y env.IMAGE_TAG
-                    sh "docker stop ${CONTAINER_NAME} || true"
-                    sh "docker rm   ${CONTAINER_NAME} || true"
-                    sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
-                    sh """
+                sh "docker stop ${CONTAINER_NAME} || true"
+                sh "docker rm   ${CONTAINER_NAME} || true"
+                sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
+                sh """
                     docker run -d \
-                        --name ${CONTAINER_NAME} \
-                        -p ${port}:8080 \
-                        ${IMAGE_NAME}:${env.IMAGE_TAG}
-                    """
+                    --name ${CONTAINER_NAME} \
+                    -p ${port}:8080 \
+                    ${IMAGE_NAME}:${env.IMAGE_TAG}
+                """
                 }
             }
         }
+
+        stage('Test') {
+            steps {
+                script {
+                    def branch = env.BRANCH_NAME
+                    def port = (branch == 'main')    ? PROD_PORT :
+                                (branch == 'staging') ? STAGING_PORT :
+                                                        DEV_PORT
+                    // lo expongo al resto del pipeline
+                    env.EXPOSE_PORT = port
+
+                    sh "curl -f http://localhost:${EXPOSE_PORT}/actuator/health"
+                }
+            }
+        }
+
     }
 
     post {
