@@ -12,8 +12,9 @@ pipeline {
         SONAR_PROJECT_KEY   = 'spring-web-service'
         SONAR_PROJECT_NAME  = 'Spring Web Service'
         CONTAINER_NAME      = 'spring-web-service'
-        EXPOSE_PORT         = '8081'             // puerto público
-        INTERNAL_PORT       = '8080'             // definido en tu Dockerfile
+        DEV_PORT     = '8081'
+        STAGING_PORT = '8082'
+        PROD_PORT    = '80'
     }
 
     triggers {
@@ -98,20 +99,22 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                // Para no fallar si el contenedor no existe:
-                sh "docker stop ${CONTAINER_NAME} || true"
-                sh "docker rm   ${CONTAINER_NAME} || true"
+                    // detecta qué rama es
+                    def branch = env.BRANCH_NAME
+                    def port = (branch == 'main')    ? PROD_PORT :
+                            (branch == 'staging') ? STAGING_PORT :
+                                                    DEV_PORT
 
-                // Trae la imagen correcta (con version-buildNumber completo)
-                sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
-
-                // Lanza el contenedor usando ese mismo tag
-                sh """
+                    // el resto igual, usando port y env.IMAGE_TAG
+                    sh "docker stop ${CONTAINER_NAME} || true"
+                    sh "docker rm   ${CONTAINER_NAME} || true"
+                    sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
+                    sh """
                     docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p ${EXPOSE_PORT}:${INTERNAL_PORT} \
-                    ${IMAGE_NAME}:${env.IMAGE_TAG}
-                """
+                        --name ${CONTAINER_NAME} \
+                        -p ${port}:8080 \
+                        ${IMAGE_NAME}:${env.IMAGE_TAG}
+                    """
                 }
             }
         }
