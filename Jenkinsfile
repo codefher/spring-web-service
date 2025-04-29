@@ -96,36 +96,40 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
-            steps {
-                script {
-                    // Detecta qué rama es
-                    def branch = env.BRANCH_NAME
-                    def port = (branch == 'main')    ? PROD_PORT :    // Puerto para producción
-                            (branch == 'staging') ? STAGING_PORT : // Puerto para staging
-                                                    DEV_PORT     // Puerto para desarrollo
-                    
-                    // Asignar un sufijo único para cada entorno
-                    def containerSuffix = (branch == 'main') ? 'prod' : (branch == 'staging') ? 'staging' : 'dev'
-                    def containerName = "${CONTAINER_NAME}-${containerSuffix}" // Asignar un nombre único para cada entorno
+            stage('Deploy') {
+                steps {
+                    script {
+                        // Detecta qué rama es
+                        def branch = env.BRANCH_NAME
+                        def port = (branch == 'main')    ? PROD_PORT :    // Puerto para producción
+                                (branch == 'staging') ? STAGING_PORT : // Puerto para staging
+                                                        DEV_PORT     // Puerto para desarrollo
 
-                    // Lo expongo al resto del pipeline
-                    env.EXPOSE_PORT = port
+                        // Asigna un sufijo único para cada entorno: dev, prod o staging
+                        def containerSuffix = (branch == 'main') ? 'prod' : (branch == 'staging') ? 'staging' : 'dev'
+                        def containerName = "${CONTAINER_NAME}-${containerSuffix}" // Asignar un nombre único para cada entorno
 
-                    // Detener y eliminar el contenedor si existe (solo para el contenedor correspondiente)
-                    sh "docker stop ${containerName} || true"
-                    sh "docker rm ${containerName} || true"
-                    sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
+                        // Lo expongo al resto del pipeline
+                        env.EXPOSE_PORT = port
 
-                    // Levantar el contenedor con un puerto específico y un nombre único
-                    sh """
-                        docker run -d \
-                        --name ${containerName} \
-                        -p ${port}:8080 \
-                        ${IMAGE_NAME}:${env.IMAGE_TAG}
-                    """
+                        // Detener y eliminar el contenedor si existe (esto no afecta a otros entornos)
+                        sh "docker stop ${containerName} || true"
+                        sh "docker rm ${containerName} || true"
+
+                        // Pull de la nueva imagen
+                        sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
+
+                        // Levantar el contenedor con un puerto específico y un nombre único
+                        sh """
+                            docker run -d \
+                            --name ${containerName} \
+                            -p ${port}:8080 \
+                            ${IMAGE_NAME}:${env.IMAGE_TAG}
+                        """
+                    }
                 }
             }
+
         }
 
 
