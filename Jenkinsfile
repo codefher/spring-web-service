@@ -104,13 +104,15 @@ pipeline {
                     def port = (branch == 'main')    ? PROD_PORT :    // Puerto para producción
                             (branch == 'staging') ? STAGING_PORT : // Puerto para staging
                                                     DEV_PORT     // Puerto para desarrollo
+                    
+                    // Asignar un sufijo único para cada entorno
                     def containerSuffix = (branch == 'main') ? 'prod' : (branch == 'staging') ? 'staging' : 'dev'
                     def containerName = "${CONTAINER_NAME}-${containerSuffix}" // Asignar un nombre único para cada entorno
 
                     // Lo expongo al resto del pipeline
                     env.EXPOSE_PORT = port
 
-                    // Detener y eliminar el contenedor si existe
+                    // Detener y eliminar el contenedor si existe (solo para el contenedor correspondiente)
                     sh "docker stop ${containerName} || true"
                     sh "docker rm ${containerName} || true"
                     sh "docker pull ${IMAGE_NAME}:${env.IMAGE_TAG}"
@@ -125,6 +127,7 @@ pipeline {
                 }
             }
         }
+
 
 /*         stage('Test') {
             steps {
